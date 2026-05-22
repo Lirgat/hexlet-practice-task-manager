@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getTasks, createTask, updateTask, deleteTask } from '../api';
 import toast from 'react-hot-toast';
-import { Plus, Search, Calendar, CheckCircle } from 'lucide-react';
+import { Plus, Search, Calendar, CheckCircle, Trash2 } from 'lucide-react';
 import { EditTaskModal } from '../components/EditTaskModal';
 
 export const Dashboard = () => {
@@ -75,6 +75,27 @@ export const Dashboard = () => {
     }
   };
 
+  // Функция для удаления всех задач
+  const handleDeleteAll = async () => {
+    if (tasks.length === 0) {
+      toast.error('Нет задач для удаления');
+      return;
+    }
+    
+    if (window.confirm(`Вы уверены, что хотите удалить ВСЕ задачи (${tasks.length} шт.)? Это действие нельзя отменить!`)) {
+      try {
+        // Удаляем каждую задачу по очереди
+        for (const task of tasks) {
+          await deleteTask(task.id);
+        }
+        await loadTasks();
+        toast.success(`Удалено ${tasks.length} задач`);
+      } catch (error) {
+        toast.error('Ошибка при удалении задач');
+      }
+    }
+  };
+
   const handleEdit = async (id, newTitle, newDescription) => {
     try {
       await updateTask(id, { title: newTitle, description: newDescription });
@@ -97,7 +118,6 @@ export const Dashboard = () => {
   const onDragEnd = (e) => {
     e.target.style.opacity = '1';
     setDraggedTask(null);
-    // Убираем подсветку со всех колонок
     document.querySelectorAll('.kanban-column').forEach(col => {
       col.classList.remove('drag-over');
     });
@@ -106,7 +126,6 @@ export const Dashboard = () => {
   const onDragOver = (e, status) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    // Подсветка колонки
     const column = e.currentTarget;
     document.querySelectorAll('.kanban-column').forEach(col => {
       col.classList.remove('drag-over');
@@ -154,7 +173,6 @@ export const Dashboard = () => {
     return matchesSearch && matchesFilter;
   });
 
-  // Сортировка
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (sortBy === 'date') {
       return new Date(b.createdAt) - new Date(a.createdAt);
@@ -195,7 +213,6 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
@@ -264,7 +281,7 @@ export const Dashboard = () => {
               </div>
             </div>
           </div>
-          <div className="card p-4">
+          <div className="card p-4 relative">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">К выполнению</p>
@@ -274,15 +291,36 @@ export const Dashboard = () => {
                 <Calendar className="h-5 w-5 text-orange-600" />
               </div>
             </div>
+            {/* Кнопка очистки всех задач */}
+            {totalTasks > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                className="absolute bottom-2 right-2 text-red-500 hover:text-red-700 transition p-1"
+                title="Удалить все задачи"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Create Task Form */}
         <div className="card p-6 mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Plus className="h-5 w-5 text-blue-500" />
-            Создать новую задачу
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Plus className="h-5 w-5 text-blue-500" />
+              Создать новую задачу
+            </h2>
+            {totalTasks > 0 && (
+              <button
+                onClick={handleDeleteAll}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200 flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Удалить все ({totalTasks})
+              </button>
+            )}
+          </div>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <input
@@ -351,7 +389,7 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Kanban Board with Native Drag & Drop */}
+        {/* Kanban Board */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {Object.entries(columns).map(([status, column]) => (
             <div
@@ -423,7 +461,6 @@ export const Dashboard = () => {
         </div>
       </main>
 
-      {/* Edit Modal */}
       {editingTask && (
         <EditTaskModal
           task={editingTask}
@@ -431,14 +468,6 @@ export const Dashboard = () => {
           onSave={handleEdit}
         />
       )}
-
-      <style jsx>{`
-        .kanban-column.drag-over {
-          transform: scale(1.02);
-          transition: all 0.2s ease;
-          box-shadow: 0 0 0 2px #3b82f6, 0 0 0 4px rgba(59, 130, 246, 0.2);
-        }
-      `}</style>
     </div>
   );
 };
