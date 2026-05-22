@@ -28,3 +28,6 @@ build/
 # Prisma (генерируемые файлы)
 backend/prisma/*.db
 backend/prisma/*.db-journal
+
+# Local Netlify folder
+.netlify
