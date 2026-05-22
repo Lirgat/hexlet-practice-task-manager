@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getTasks, createTask, updateTask, deleteTask } from '../api';
 import toast from 'react-hot-toast';
-import { Plus, Search, Calendar, CheckCircle, Trash2 } from 'lucide-react';
+import { Plus, Search, Calendar, CheckCircle, Trash2, AlertCircle } from 'lucide-react';
 import { EditTaskModal } from '../components/EditTaskModal';
 
 export const Dashboard = () => {
@@ -10,9 +10,13 @@ export const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newPriority, setNewPriority] = useState('medium');
+  const [newDueDate, setNewDueDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterOverdue, setFilterOverdue] = useState('all'); // all, overdue, not-overdue
   const [sortBy, setSortBy] = useState('date');
   const [editingTask, setEditingTask] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
@@ -30,6 +34,22 @@ export const Dashboard = () => {
     }
   };
 
+  // Функция проверки просрочена ли задача
+  const isTaskOverdue = (task) => {
+    if (!task.dueDate) return false;
+    if (task.status === 'done') return false;
+    const dueDate = new Date(task.dueDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  };
+
+  // Получить цвет для просроченной задачи
+  const getOverdueColor = (task) => {
+    if (!isTaskOverdue(task)) return '';
+    return 'border-red-500 bg-red-50';
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) {
@@ -38,9 +58,16 @@ export const Dashboard = () => {
     }
     setLoading(true);
     try {
-      await createTask({ title: newTitle, description: newDescription });
+      await createTask({ 
+        title: newTitle, 
+        description: newDescription,
+        priority: newPriority,
+        dueDate: newDueDate || null
+      });
       setNewTitle('');
       setNewDescription('');
+      setNewPriority('medium');
+      setNewDueDate('');
       await loadTasks();
       toast.success('Задача создана!');
     } catch (error) {
@@ -75,7 +102,6 @@ export const Dashboard = () => {
     }
   };
 
-  // Функция для удаления всех задач
   const handleDeleteAll = async () => {
     if (tasks.length === 0) {
       toast.error('Нет задач для удаления');
@@ -84,7 +110,6 @@ export const Dashboard = () => {
     
     if (window.confirm(`Вы уверены, что хотите удалить ВСЕ задачи (${tasks.length} шт.)? Это действие нельзя отменить!`)) {
       try {
-        // Удаляем каждую задачу по очереди
         for (const task of tasks) {
           await deleteTask(task.id);
         }
@@ -123,13 +148,14 @@ export const Dashboard = () => {
     });
   };
 
-  const onDragOver = (e, status) => {
+  const onDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+  };
+
+  const onDragEnter = (e, status) => {
+    e.preventDefault();
     const column = e.currentTarget;
-    document.querySelectorAll('.kanban-column').forEach(col => {
-      col.classList.remove('drag-over');
-    });
     column.classList.add('drag-over');
   };
 
@@ -169,8 +195,17 @@ export const Dashboard = () => {
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           task.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || task.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
+    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+    
+    let matchesOverdue = true;
+    if (filterOverdue === 'overdue') {
+      matchesOverdue = isTaskOverdue(task);
+    } else if (filterOverdue === 'not-overdue') {
+      matchesOverdue = !isTaskOverdue(task);
+    }
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesOverdue;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
@@ -179,6 +214,16 @@ export const Dashboard = () => {
     }
     if (sortBy === 'title') {
       return a.title.localeCompare(b.title);
+    }
+    if (sortBy === 'priority') {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    }
+    if (sortBy === 'dueDate') {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
     }
     return 0;
   });
@@ -209,7 +254,26 @@ export const Dashboard = () => {
 
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'done').length;
+  const overdueTasks = tasks.filter(t => isTaskOverdue(t)).length;
   const completionRate = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+  const getPriorityColor = (priority) => {
+    switch(priority) {
+      case 'high': return 'bg-red-100 text-red-700';
+      case 'medium': return 'bg-yellow-100 text-yellow-700';
+      case 'low': return 'bg-green-100 text-green-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getPriorityLabel = (priority) => {
+    switch(priority) {
+      case 'high': return '🔴 Высокий';
+      case 'medium': return '🟡 Средний';
+      case 'low': return '🟢 Низкий';
+      default: return '⚪ Обычный';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -247,7 +311,7 @@ export const Dashboard = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <div className="card p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -281,7 +345,7 @@ export const Dashboard = () => {
               </div>
             </div>
           </div>
-          <div className="card p-4 relative">
+          <div className="card p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">К выполнению</p>
@@ -291,16 +355,17 @@ export const Dashboard = () => {
                 <Calendar className="h-5 w-5 text-orange-600" />
               </div>
             </div>
-            {/* Кнопка очистки всех задач */}
-            {totalTasks > 0 && (
-              <button
-                onClick={handleDeleteAll}
-                className="absolute bottom-2 right-2 text-red-500 hover:text-red-700 transition p-1"
-                title="Удалить все задачи"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
+          </div>
+          <div className="card p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Просрочено</p>
+                <p className="text-2xl font-bold text-red-600">{overdueTasks}</p>
+              </div>
+              <div className="h-10 w-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -341,6 +406,23 @@ export const Dashboard = () => {
                 className="input"
               />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <select
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value)}
+                className="input"
+              >
+                <option value="low">🟢 Низкий приоритет</option>
+                <option value="medium">🟡 Средний приоритет</option>
+                <option value="high">🔴 Высокий приоритет</option>
+              </select>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="input"
+              />
+            </div>
             <button
               type="submit"
               disabled={loading}
@@ -378,12 +460,33 @@ export const Dashboard = () => {
                 <option value="done">Выполнено</option>
               </select>
               <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className="input w-auto"
+              >
+                <option value="all">Все приоритеты</option>
+                <option value="high">Высокий</option>
+                <option value="medium">Средний</option>
+                <option value="low">Низкий</option>
+              </select>
+              <select
+                value={filterOverdue}
+                onChange={(e) => setFilterOverdue(e.target.value)}
+                className="input w-auto"
+              >
+                <option value="all">Все задачи</option>
+                <option value="overdue">Только просроченные</option>
+                <option value="not-overdue">Не просроченные</option>
+              </select>
+              <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="input w-auto"
               >
-                <option value="date">По дате</option>
+                <option value="date">По дате создания</option>
                 <option value="title">По названию</option>
+                <option value="priority">По приоритету</option>
+                <option value="dueDate">По сроку выполнения</option>
               </select>
             </div>
           </div>
@@ -395,7 +498,8 @@ export const Dashboard = () => {
             <div
               key={status}
               className={`kanban-column ${column.bgColor} rounded-xl p-4 min-h-[500px] transition-all duration-200`}
-              onDragOver={(e) => onDragOver(e, status)}
+              onDragOver={onDragOver}
+              onDragEnter={(e) => onDragEnter(e, status)}
               onDragLeave={onDragLeave}
               onDrop={(e) => onDrop(e, status)}
             >
@@ -410,13 +514,33 @@ export const Dashboard = () => {
                     draggable="true"
                     onDragStart={(e) => onDragStart(e, task)}
                     onDragEnd={onDragEnd}
-                    className="card p-4 hover:shadow-lg transition-all duration-200 group cursor-grab active:cursor-grabbing"
+                    className={`card p-4 hover:shadow-lg transition-all duration-200 group cursor-grab active:cursor-grabbing border-l-4 ${getOverdueColor(task)} ${isTaskOverdue(task) ? 'shadow-md' : ''}`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-2">{task.title}</h3>
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <h3 className="font-semibold text-gray-900">{task.title}</h3>
+                          <span className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority || 'medium')}`}>
+                            {getPriorityLabel(task.priority || 'medium')}
+                          </span>
+                          {isTaskOverdue(task) && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Просрочено!
+                            </span>
+                          )}
+                        </div>
                         {task.description && (
-                          <p className="text-sm text-gray-600 mb-3">{task.description}</p>
+                          <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                        )}
+                        {task.dueDate && (
+                          <p className={`text-xs mb-2 flex items-center gap-1 ${isTaskOverdue(task) ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+                            <Calendar className="h-3 w-3" />
+                            Срок: {new Date(task.dueDate).toLocaleDateString()}
+                            {isTaskOverdue(task) && (
+                              <span className="ml-1">(Просрочена на {Math.ceil((new Date() - new Date(task.dueDate)) / (1000 * 60 * 60 * 24))} дн.)</span>
+                            )}
+                          </p>
                         )}
                         <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                           <button

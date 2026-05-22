@@ -1,75 +1,91 @@
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
+const { tasks, getNextTaskId, createTask, updateTask, deleteTask, findTasksByUser } = require('../users.db');
 
 const router = express.Router();
 router.use(authMiddleware);
 
-// In-memory хранилище задач
-const tasks = [];
-let nextTaskId = 1;
-
 // Получить все задачи пользователя
 router.get('/', (req, res) => {
-  const userTasks = tasks.filter(t => t.userId === req.userId);
-  res.json(userTasks);
+  try {
+    const userTasks = findTasksByUser(req.userId);
+    res.json(userTasks);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Создать задачу
 router.post('/', (req, res) => {
-  const { title, description, status = 'todo' } = req.body;
-  
-  if (!title) {
-    return res.status(400).json({ error: 'Title is required' });
+  try {
+    const { title, description, status = 'todo', priority = 'medium', dueDate = null } = req.body;
+    
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    
+    const task = {
+      id: getNextTaskId(),
+      title,
+      description: description || '',
+      status,
+      priority,
+      dueDate,
+      userId: req.userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    createTask(task);
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  
-  const task = {
-    id: nextTaskId++,
-    title,
-    description: description || '',
-    status,
-    userId: req.userId,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
-  
-  tasks.push(task);
-  res.status(201).json(task);
 });
 
 // Обновить задачу
 router.put('/:id', (req, res) => {
-  const { id } = req.params;
-  const { title, description, status } = req.body;
-  
-  const taskIndex = tasks.findIndex(t => t.id === parseInt(id) && t.userId === req.userId);
-  
-  if (taskIndex === -1) {
-    return res.status(404).json({ error: 'Task not found' });
+  try {
+    const { id } = req.params;
+    const { title, description, status, priority, dueDate } = req.body;
+    
+    const task = findTasksByUser(req.userId).find(t => t.id === parseInt(id));
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const updatedTask = updateTask(parseInt(id), {
+      title: title || task.title,
+      description: description !== undefined ? description : task.description,
+      status: status || task.status,
+      priority: priority || task.priority,
+      dueDate: dueDate !== undefined ? dueDate : task.dueDate,
+      updatedAt: new Date().toISOString()
+    });
+    
+    res.json(updatedTask);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  
-  tasks[taskIndex] = {
-    ...tasks[taskIndex],
-    title: title || tasks[taskIndex].title,
-    description: description !== undefined ? description : tasks[taskIndex].description,
-    status: status || tasks[taskIndex].status,
-    updatedAt: new Date()
-  };
-  
-  res.json(tasks[taskIndex]);
 });
 
 // Удалить задачу
 router.delete('/:id', (req, res) => {
-  const { id } = req.params;
-  
-  const taskIndex = tasks.findIndex(t => t.id === parseInt(id) && t.userId === req.userId);
-  
-  if (taskIndex === -1) {
-    return res.status(404).json({ error: 'Task not found' });
+  try {
+    const { id } = req.params;
+    
+    const task = findTasksByUser(req.userId).find(t => t.id === parseInt(id));
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    deleteTask(parseInt(id));
+    res.json({ message: 'Task deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  
-  tasks.splice(taskIndex, 1);
-  res.json({ message: 'Task deleted successfully' });
 });
 
 module.exports = router;
