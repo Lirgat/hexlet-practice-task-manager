@@ -1,23 +1,28 @@
 import axios from 'axios';
 
-const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+const API = axios.create({ baseURL: '/api' });
+
+// Автоматически добавляем токен в заголовки, если он есть
+API.interceptors.request.use((req) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    req.headers.Authorization = `Bearer ${token}`;
+  }
+  return req;
 });
 
-// Проверка здоровья сервера
-export const checkHealth = () => api.get('/health');
+// Регистрация
+export const register = (userData) => API.post('/auth/register', userData);
+// Вход
+export const login = (userData) => API.post('/auth/login', userData);
 
-// Auth endpoints (будут добавлены позже)
-export const register = (data) => api.post('/auth/register', data);
-export const login = (data) => api.post('/auth/login', data);
+// Получить все задачи
+export const getTasks = () => API.get('/tasks');
+// Создать задачу
+export const createTask = (taskData) => API.post('/tasks', taskData);
+// Обновить задачу
+export const updateTask = (id, taskData) => API.put(`/tasks/${id}`, taskData);
+// Удалить задачу
+export const deleteTask = (id) => API.delete(`/tasks/${id}`);
 
-// Tasks endpoints (будут добавлены позже)
-export const getTasks = () => api.get('/tasks');
-export const createTask = (data) => api.post('/tasks', data);
-export const updateTask = (id, data) => api.put(`/tasks/${id}`, data);
-export const deleteTask = (id) => api.delete(`/tasks/${id}`);
-
-export default api;
+export default API;
