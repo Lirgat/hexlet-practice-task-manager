@@ -16,7 +16,7 @@ export const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [filterOverdue, setFilterOverdue] = useState('all'); // all, overdue, not-overdue
+  const [filterOverdue, setFilterOverdue] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [editingTask, setEditingTask] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
@@ -34,7 +34,6 @@ export const Dashboard = () => {
     }
   };
 
-  // Функция проверки просрочена ли задача
   const isTaskOverdue = (task) => {
     if (!task.dueDate) return false;
     if (task.status === 'done') return false;
@@ -44,7 +43,6 @@ export const Dashboard = () => {
     return dueDate < today;
   };
 
-  // Получить цвет для просроченной задачи
   const getOverdueColor = (task) => {
     if (!isTaskOverdue(task)) return '';
     return 'border-red-500 bg-red-50';
@@ -121,9 +119,15 @@ export const Dashboard = () => {
     }
   };
 
-  const handleEdit = async (id, newTitle, newDescription) => {
+  // Обновлённая функция редактирования с поддержкой priority и dueDate
+  const handleEdit = async (id, newTitle, newDescription, newPriority, newDueDate) => {
     try {
-      await updateTask(id, { title: newTitle, description: newDescription });
+      await updateTask(id, { 
+        title: newTitle, 
+        description: newDescription,
+        priority: newPriority,
+        dueDate: newDueDate || null
+      });
       await loadTasks();
       toast.success('Задача обновлена');
       setEditingTask(null);
@@ -310,7 +314,7 @@ export const Dashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
+        {/* Stats Cards - аналогично предыдущей версии */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <div className="card p-4">
             <div className="flex items-center justify-between">
@@ -369,7 +373,7 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Create Task Form */}
+        {/* Create Task Form и Filters - аналогично предыдущей версии */}
         <div className="card p-6 mb-8">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
